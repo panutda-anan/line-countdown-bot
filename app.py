@@ -98,6 +98,11 @@ def test():
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     """ตอบกลับเมื่อมีคนส่งข้อความมา"""
+
+    print(f"Source type: {event.source.type}")
+    if event.source.type == 'group':
+        print(f"GROUP_ID: {event.source.group_id}")
+
     user_message = event.message.text.lower()
     
     with ApiClient(configuration) as api_client:
