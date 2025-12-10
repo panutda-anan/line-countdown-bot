@@ -54,22 +54,47 @@ def send_countdown_message():
         print(f"❌ Error: {e}")
 
 def schedule_daily_message():
-    """ส่งข้อความทุกวันเวลา 9:00 น."""
+    """ส่งข้อความวันละครั้ง ในช่วง 9:00-9:15 น. (ส่งครั้งแรกที่บอทตื่น)"""
+    last_sent_date = None
+    
     while True:
         now = datetime.now()
-        # ตั้งเวลาส่งข้อความ 9:00 น.
-        target_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        current_date = now.strftime("%Y-%m-%d")
+        current_hour = now.hour
+        current_minute = now.minute
         
-        # ถ้าเลย 9 โมงแล้ว ให้ส่งพรุ่งนี้
-        if now > target_time:
-            target_time += timedelta(days=1)
+        # ตรวจสอบว่าอยู่ในช่วง 9:00-9:15 น. หรือไม่
+        in_send_window = (current_hour == 9 and current_minute < 15)
         
-        # คำนวณเวลาที่ต้องรอ
-        wait_seconds = (target_time - now).total_seconds()
-        print(f"⏰ จะส่งข้อความอีกครั้งใน {wait_seconds/3600:.1f} ชั่วโมง")
+        # ตรวจสอบว่าวันนี้ส่งแล้วหรือยัง
+        already_sent_today = (last_sent_date == current_date)
         
-        time.sleep(wait_seconds)
-        send_countdown_message()
+        if in_send_window and not already_sent_today:
+            # อยู่ในช่วงเวลาที่ส่งได้ และยังไม่ได้ส่งวันนี้
+            print(f"✅ อยู่ในช่วงส่งข้อความ ({now.strftime('%H:%M')}) กำลังส่ง...")
+            send_countdown_message()
+            last_sent_date = current_date
+            print(f"📅 ส่งข้อความสำเร็จ! วันที่ {current_date} เวลา {now.strftime('%H:%M:%S')}")
+            # รอ 1 ชั่วโมงเพื่อไม่ให้ส่งซ้ำในวันเดียวกัน
+            time.sleep(3600)
+        elif already_sent_today:
+            # ส่งไปแล้ววันนี้ รอจนถึงวันพรุ่งนี้
+            tomorrow_9am = (now + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+            wait_seconds = (tomorrow_9am - now).total_seconds()
+            print(f"😴 ส่งไปแล้ววันนี้ รอจนถึงพรุ่งนี้ 9:00 น. ({wait_seconds/3600:.1f} ชั่วโมง)")
+            time.sleep(min(wait_seconds, 3600))  # รอสูงสุด 1 ชั่วโมงต่อรอบ
+        elif current_hour < 9:
+            # ยังไม่ถึง 9:00 น. รอจนถึง 9:00 น.
+            today_9am = now.replace(hour=9, minute=0, second=0, microsecond=0)
+            wait_seconds = (today_9am - now).total_seconds()
+            print(f"⏰ รอจนถึง 9:00 น. ({wait_seconds/3600:.1f} ชั่วโมง)")
+            time.sleep(min(wait_seconds, 3600))  # รอสูงสุด 1 ชั่วโมงต่อรอบ
+        else:
+            # เลยช่วง 9:15 น. แล้ว และยังไม่ได้ส่งวันนี้ (bot อาจหลับพอดี) รอจนถึงพรุ่งนี้
+            tomorrow_9am = (now + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+            wait_seconds = (tomorrow_9am - now).total_seconds()
+            print(f"😢 พลาดช่วงส่งข้อความวันนี้ รอจนถึงพรุ่งนี้ 9:00 น. ({wait_seconds/3600:.1f} ชั่วโมง)")
+            time.sleep(min(wait_seconds, 3600))  # รอสูงสุด 1 ชั่วโมงต่อรอบ
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -98,11 +123,6 @@ def test():
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     """ตอบกลับเมื่อมีคนส่งข้อความมา"""
-
-    print(f"Source type: {event.source.type}")
-    if event.source.type == 'group':
-        print(f"GROUP_ID: {event.source.group_id}")
-
     user_message = event.message.text.lower()
     
     with ApiClient(configuration) as api_client:
